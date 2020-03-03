@@ -17,10 +17,19 @@ defmodule Cadet.Assessments do
   @xp_bonus_assessment_type ~w(mission sidequest)a
   @submit_answer_roles ~w(student)a
   @delete_assessment_role ~w(staff admin)a
+  @publish_assessment_role ~w(staff admin)a
   @unsubmit_assessment_role ~w(staff admin)a
   @grading_roles ~w()a
   @see_all_submissions_roles ~w(staff admin)a
   @open_all_assessment_roles ~w(staff admin)a
+
+  def toggle_publish_assessment(_publisher = %User{role: role}, id, bool) do
+    if role in @publish_assessment_role do
+      update_assessment(id, %{is_published: bool})
+    else
+      {:error, {:forbidden, "User is not permitted to publish"}}
+    end
+  end
 
   def delete_assessment(_deleter = %User{role: role}, id) do
     if role in @delete_assessment_role do
@@ -216,7 +225,7 @@ defmodule Cadet.Assessments do
     assessment_with_questions_and_answers(id, user, nil)
   end
 
-  @doc """
+@doc """
   Returns a list of assessments with all fields and an indicator showing whether it has been attempted
   by the supplied user
   """
@@ -267,6 +276,62 @@ defmodule Cadet.Assessments do
       end)
 
     {:ok, assessments}
+  end
+
+  def all_assessments(user = %User{}) do
+    assessments =
+      Query.all_assessments_with_max_xp_and_grade()
+      |> subquery()
+      |> join(
+        :left,
+        [a],
+        s in subquery(Query.all_submissions_with_xp_and_grade()),
+        on: a.id == s.assessment_id and s.student_id == ^user.id
+      )
+      |> join(
+        :left,
+        [a, _],
+        q_count in subquery(Query.assessments_question_count()),
+        on: a.id == q_count.assessment_id
+      )
+      |> join(
+        :left,
+        [_, s, _],
+        a_count in subquery(Query.submissions_graded_count()),
+        on: s.id == a_count.submission_id
+      )
+      |> select([a, s, q_count, a_count], %{
+        a
+        | xp: fragment("? + ? + ?", s.xp, s.xp_adjustment, s.xp_bonus),
+          grade: fragment("? + ?", s.grade, s.adjustment),
+          user_status: s.status,
+          question_count: q_count.count,
+          graded_count: a_count.count
+      })
+      |> order_by(:open_at)
+      |> Repo.all()
+      |> Enum.map(fn assessment = %Assessment{} ->
+        %{
+          assessment
+          | grading_status:
+              build_grading_status(
+                assessment.user_status,
+                assessment.type,
+                assessment.question_count,
+                assessment.graded_count
+              )
+        }
+      end)
+
+    {:ok, assessments}
+  end
+
+  def get_assessments_overview(user = %User{}) do
+    role = user.role
+    case role do
+      :student -> all_published_assessments(user)
+      _ -> all_assessments(user)
+    end
   end
 
   defp build_grading_status(submission_status, a_type, q_count, g_count) do

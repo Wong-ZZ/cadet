@@ -20,7 +20,7 @@ defmodule CadetWeb.AssessmentsController do
 
   def index(conn, _) do
     user = conn.assigns[:current_user]
-    {:ok, assessments} = Assessments.all_published_assessments(user)
+    {:ok, assessments} = Assessments.get_assessments_overview(user)
 
     render(conn, "index.json", assessments: assessments)
   end
@@ -32,6 +32,20 @@ defmodule CadetWeb.AssessmentsController do
     case Assessments.assessment_with_questions_and_answers(assessment_id, user, password) do
       {:ok, assessment} -> render(conn, "show.json", assessment: assessment)
       {:error, {status, message}} -> send_resp(conn, status, message)
+    end
+  end
+
+  def publish(conn, %{"id" => id, "bool" => bool }) do
+    result = Assessments.toggle_publish_assessment(conn.assigns.current_user, id, bool)
+
+    case result do
+      {:ok, _nil} ->
+        send_resp(conn, 200, "OK")
+
+      {:error, {status, message}} ->
+        conn
+        |> put_status(status)
+        |> text(message)
     end
   end
 
@@ -51,10 +65,11 @@ defmodule CadetWeb.AssessmentsController do
 
   def create(conn, %{"assessment" => assessment}) do
     file = assessment["file"]
-    file.path 
+    result = file.path 
     |> File.read!()
     |> parse_xml()
-    |> case do
+
+    case result do
       :ok ->
         send_resp(conn, 200, "OK")
 
