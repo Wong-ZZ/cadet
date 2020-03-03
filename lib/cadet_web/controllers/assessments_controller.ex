@@ -35,7 +35,7 @@ defmodule CadetWeb.AssessmentsController do
     end
   end
 
-  def publish(conn, %{"id" => id, "bool" => bool }) do
+  def update(conn, %{"id" => id, "bool" => bool }) do
     result = Assessments.toggle_publish_assessment(conn.assigns.current_user, id, bool)
 
     case result do
