@@ -128,7 +128,7 @@ defmodule Cadet.Updater.XMLParser do
         summary_long: ~x"./TEXT/text()" |> transform_by(&process_charlist/1),
         password: ~x"//PASSWORD/text()"so |> transform_by(&process_charlist/1)
       )
-      |> Map.put(:is_published, true)
+      |> Map.put(:is_published, false)
 
     if assessment_params.access === "public" do
       Map.put(assessment_params, :password, nil)
