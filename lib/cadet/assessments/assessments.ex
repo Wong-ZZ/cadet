@@ -16,10 +16,20 @@ defmodule Cadet.Assessments do
   @xp_early_submission_max_bonus 100
   @xp_bonus_assessment_type ~w(mission sidequest)a
   @submit_answer_roles ~w(student)a
+  @delete_assessment_role ~w(staff admin)a
   @unsubmit_assessment_role ~w(staff admin)a
   @grading_roles ~w()a
   @see_all_submissions_roles ~w(staff admin)a
   @open_all_assessment_roles ~w(staff admin)a
+
+  def delete_assessment(_deleter = %User{role: role}, id) do
+    if role in @delete_assessment_role do
+      assessment = Repo.get(Assessment, id)
+      Repo.delete(assessment)
+    else
+      {:error, {:forbidden, "User is not permitted to delete"}}
+    end
+  end
 
   @spec user_total_xp(%User{}) :: integer()
   def user_total_xp(%User{id: user_id}) when is_ecto_id(user_id) do
@@ -316,8 +326,7 @@ defmodule Cadet.Assessments do
     |> case do
       nil ->
         Assessment.changeset(%Assessment{}, params)
-
-      assessment ->
+      assessment ->        
         if Timex.after?(assessment.open_at, Timex.now()) do
           # Delete all existing questions
           %{id: assessment_id} = assessment

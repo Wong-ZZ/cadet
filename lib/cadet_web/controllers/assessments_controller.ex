@@ -4,6 +4,7 @@ defmodule CadetWeb.AssessmentsController do
   use PhoenixSwagger
 
   alias Cadet.Assessments
+  import Cadet.Updater.XMLParser, only: [parse_xml: 1]
 
   def submit(conn, %{"assessmentid" => assessment_id}) when is_ecto_id(assessment_id) do
     case Assessments.finalise_submission(assessment_id, conn.assigns.current_user) do
@@ -31,6 +32,36 @@ defmodule CadetWeb.AssessmentsController do
     case Assessments.assessment_with_questions_and_answers(assessment_id, user, password) do
       {:ok, assessment} -> render(conn, "show.json", assessment: assessment)
       {:error, {status, message}} -> send_resp(conn, status, message)
+    end
+  end
+
+  def delete(conn, %{"id" => id}) do
+    result = Assessments.delete_assessment(conn.assigns.current_user, id)
+
+    case result do
+      {:ok, _nil} ->
+        send_resp(conn, 200, "OK")
+
+      {:error, {status, message}} ->
+        conn
+        |> put_status(status)
+        |> text(message)
+    end
+  end
+
+  def create(conn, %{"assessment" => assessment}) do
+    file = assessment["file"]
+    file.path 
+    |> File.read!()
+    |> parse_xml()
+    |> case do
+      :ok ->
+        send_resp(conn, 200, "OK")
+
+      :error ->
+        conn
+        |> put_status(404)
+        |> text("something went wrong")
     end
   end
 
