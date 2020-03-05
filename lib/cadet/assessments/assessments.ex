@@ -16,12 +16,27 @@ defmodule Cadet.Assessments do
   @xp_early_submission_max_bonus 100
   @xp_bonus_assessment_type ~w(mission sidequest)a
   @submit_answer_roles ~w(student)a
+  @change_dates_assessment_role ~w(staff admin)a
   @delete_assessment_role ~w(staff admin)a
   @publish_assessment_role ~w(staff admin)a
   @unsubmit_assessment_role ~w(staff admin)a
   @grading_roles ~w()a
   @see_all_submissions_roles ~w(staff admin)a
   @open_all_assessment_roles ~w(staff admin)a
+
+  def change_dates_assessment(_user = %User{role: role}, id, close_at, open_at) do
+    if role in @change_dates_assessment_role do
+      assessment = Repo.get(Assessment, id)
+      previous_open_time = assessment.open_at
+      unless previous_open_time != open_at and Timex.before?(previous_open_time, Timex.now()) do
+        update_assessment(id, %{close_at: close_at, open_at: open_at})
+      else
+        {:error, {:forbidden, "Assessment is already opened"}}
+      end
+    else
+      {:error, {:forbidden, "User is not permitted to edit"}}
+    end
+  end
 
   def toggle_publish_assessment(_publisher = %User{role: role}, id, bool) do
     if role in @publish_assessment_role do

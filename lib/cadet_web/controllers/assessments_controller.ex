@@ -35,8 +35,24 @@ defmodule CadetWeb.AssessmentsController do
     end
   end
 
-  def update(conn, %{"id" => id, "bool" => bool }) do
+  def update(conn, %{"id" => id, "bool" => bool}) do
     result = Assessments.toggle_publish_assessment(conn.assigns.current_user, id, bool)
+
+    case result do
+      {:ok, _nil} ->
+        send_resp(conn, 200, "OK")
+
+      {:error, {status, message}} ->
+        conn
+        |> put_status(status)
+        |> text(message)
+    end
+  end
+
+  def update(conn, %{"id" => id, "closeAt" => close_at, "openAt" => open_at}) do
+    formatted_close_date = elem(DateTime.from_iso8601(close_at), 1)
+    formatted_open_date = elem(DateTime.from_iso8601(open_at), 1)
+    result = Assessments.change_dates_assessment(conn.assigns.current_user, id, formatted_close_date, formatted_open_date)
 
     case result do
       {:ok, _nil} ->

@@ -41,6 +41,7 @@ defmodule CadetWeb.Router do
     delete("/assessments/:id", AssessmentsController, :delete)
     post("/assessments/:id", AssessmentsController, :show)
     post("/assessments/publish/:id", AssessmentsController, :update)
+    post("/assessments/update/:id", AssessmentsController, :update)
     post("/assessments/:assessmentid/submit", AssessmentsController, :submit)
     post("/assessments/question/:questionid/submit", AnswerController, :submit)
 
