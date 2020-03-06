@@ -28,7 +28,7 @@ defmodule Cadet.Assessments do
     if role in @change_dates_assessment_role do
       assessment = Repo.get(Assessment, id)
       previous_open_time = assessment.open_at
-      unless Timex.equal?(previous_open_time, open_at) and Timex.before?(previous_open_time, Timex.now()) do
+      unless previous_open_time != open_at and Timex.before?(previous_open_time, Timex.now()) do
         update_assessment(id, %{close_at: close_at, open_at: open_at})
       else
         {:error, {:forbidden, "Assessment is already opened"}}
