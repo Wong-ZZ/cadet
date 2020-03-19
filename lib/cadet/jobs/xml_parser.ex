@@ -95,6 +95,9 @@ defmodule Cadet.Updater.XMLParser do
       :error ->
         :error
 
+      {:error, {status, message}} ->
+        {:error, {status, message}}
+
       {:error, stage, %{errors: [assessment: {"is already open", []}]}, _} when is_atom(stage) ->
         Logger.warn("Assessment already open, ignoring...")
         :ok
@@ -141,18 +144,18 @@ defmodule Cadet.Updater.XMLParser do
     if verify_has_time_offset(assessment_params) do
       {:ok, assessment_params}
     else
-      Logger.error("Time does not have offset specified.")
-      :error
+      error_message = "Time does not have offset specified."
+      return_badrequest(error_message)
     end
   rescue
     e in Timex.Parse.ParseError ->
-      Logger.error("Time does not conform to ISO8601 DateTime: #{e.message}")
-      :error
+      error_message = "Time does not conform to ISO8601 DateTime: #{e.message}"
+      return_badrequest(error_message)
 
     # This error is raised by xpath/3 when TASK does not exist (hence is equal to nil)
     Protocol.UndefinedError ->
-      Logger.error("Missing TASK")
-      :error
+      error_message = "Missing TASK"
+      return_badrequest(error_message)
   end
 
   def process_access("private") do
@@ -182,7 +185,7 @@ defmodule Cadet.Updater.XMLParser do
     open_at.__struct__ != NaiveDateTime and close_at.__struct__ != NaiveDateTime
   end
 
-  @spec process_questions(String.t()) :: {:ok, [map()]} | :error
+  @spec process_questions(String.t()) :: {:ok, [map()]} | {:error, {atom(), String.t}}
   defp process_questions(xml) do
     default_library = xpath(xml, ~x"//TASK/DEPLOYMENT"e)
     default_grading_library = xpath(xml, ~x"//TASK/GRADERDEPLOYMENT"e)
@@ -206,16 +209,17 @@ defmodule Cadet.Updater.XMLParser do
           question
         else
           {:no_missing_attr?, false} ->
-            Logger.error("Missing attribute(s) on PROBLEM")
-            :error
-
-          :error ->
-            :error
+            error_message = "Missing attribute(s) on PROBLEM"
+            return_badrequest(error_message)
+          
+          {:error, {status, message}} ->
+            {:error, {status, message}}
         end
       end)
 
-    if Enum.any?(questions_params, &(&1 == :error)) do
-      :error
+    if Enum.any?(questions_params, &(elem(&1, 0) == :error)) do
+      error = Enum.find(questions_params, &(elem(&1, 0) == :error))
+      error
     else
       {:ok, questions_params}
     end
@@ -228,7 +232,7 @@ defmodule Cadet.Updater.XMLParser do
     Logger.error("Changeset: #{inspect(changeset, pretty: true)}")
   end
 
-  @spec process_question_by_question_type(map()) :: map() | :error
+  @spec process_question_by_question_type(map()) :: map() | {:error, {atom(), String.t}}
   defp process_question_by_question_type(question) do
     question[:entity]
     |> process_question_entity_by_type(question[:type])
@@ -236,8 +240,8 @@ defmodule Cadet.Updater.XMLParser do
       question_map when is_map(question_map) ->
         Map.put(question, :question, question_map)
 
-      :error ->
-        :error
+      {:error, {status, message}} ->
+        {:error, {status, message}}
     end
   end
 
@@ -288,11 +292,11 @@ defmodule Cadet.Updater.XMLParser do
   end
 
   defp process_question_entity_by_type(_, _) do
-    Logger.error("Invalid question type.")
-    :error
+    error_message = "Invalid question type."
+    return_badrequest(error_message)
   end
 
-  @spec process_question_library(map(), any(), any()) :: map() | :error
+  @spec process_question_library(map(), any(), any()) :: map() | {:error, {atom(), String.t}}
   defp process_question_library(question, default_library, default_grading_library) do
     library = xpath(question[:entity], ~x"./DEPLOYMENT"o) || default_library
 
@@ -304,8 +308,8 @@ defmodule Cadet.Updater.XMLParser do
       |> Map.put(:library, process_question_library(library))
       |> Map.put(:grading_library, process_question_library(grading_library))
     else
-      Logger.error("Missing DEPLOYMENT")
-      :error
+      error_message = "Missing DEPLOYMENT"
+      return_badrequest(error_message)
     end
   end
 
@@ -349,5 +353,10 @@ defmodule Cadet.Updater.XMLParser do
     charlist
     |> to_string()
     |> String.trim()
+  end
+
+  defp return_badrequest(error_message) do
+    Logger.error(error_message)
+    {:error, {:bad_request, error_message}}
   end
 end

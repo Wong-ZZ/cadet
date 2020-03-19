@@ -89,10 +89,8 @@ defmodule CadetWeb.AssessmentsController do
       :ok ->
         send_resp(conn, 200, "OK")
 
-      :error ->
-        conn
-        |> put_status(404)
-        |> text("something went wrong")
+      {:error, {status, message}} ->
+        send_resp(conn, status, message)
     end
   end
 
