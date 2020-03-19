@@ -217,8 +217,8 @@ defmodule Cadet.Updater.XMLParser do
         end
       end)
 
-    if Enum.any?(questions_params, &(elem(&1, 0) == :error)) do
-      error = Enum.find(questions_params, &(elem(&1, 0) == :error))
+    if Enum.any?(questions_params, &(!is_map(&1))) do
+      error = Enum.find(questions_params, &(!is_map(&1)))
       error
     else
       {:ok, questions_params}
