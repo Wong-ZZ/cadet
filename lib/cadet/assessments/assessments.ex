@@ -197,11 +197,18 @@ defmodule Cadet.Assessments do
 
   def assessment_with_questions_and_answers(id, user = %User{}, password)
       when is_ecto_id(id) do
+    role = user.role
     assessment =
-      Assessment
-      |> where(id: ^id)
-      |> where(is_published: true)
-      |> Repo.one()
+      if role in @open_all_assessment_roles do
+        Assessment
+        |> where(id: ^id)
+        |> Repo.one()
+      else
+        Assessment
+        |> where(id: ^id)
+        |> where(is_published: true)
+        |> Repo.one()
+      end
 
     if assessment do
       assessment_with_questions_and_answers(assessment, user, password)
