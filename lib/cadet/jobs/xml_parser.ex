@@ -77,7 +77,7 @@ defmodule Cadet.Updater.XMLParser do
     end
   end
 
-  @spec parse_xml(String.t()) :: :ok | :error
+  @spec parse_xml(String.t()) :: :ok | :error | {:error, {atom(), String.t}}
   def parse_xml(xml) do
     with {:ok, assessment_params} <- process_assessment(xml),
          {:ok, questions_params} <- process_questions(xml),
@@ -104,16 +104,30 @@ defmodule Cadet.Updater.XMLParser do
 
       {:error, stage, changeset, _} when is_atom(stage) ->
         log_error_bad_changeset(changeset, stage)
-        :error
+        changeset_error = 
+          changeset
+          |> Map.get(:errors)
+          |> List.first()
+        {field, {error, _}} = changeset_error
+        error_message = to_string(field) <> " " <> error
+        {:error, {:bad_request, error_message}}
     end
   catch
     # the :erlsom library used by SweetXml will exit if XML is invalid
     :exit, _ ->
-      :error
+      {:error, {:bad_request, "Invalid XML (Check if your tags are correct)"}}
   end
 
   @spec process_assessment(String.t()) :: {:ok, map()} | :error
   defp process_assessment(xml) do
+    open_at = 
+      Timex.now()
+      |> Timex.beginning_of_day()
+      |> Timex.shift(days: 3)
+      |> Timex.shift(hours: 4)
+
+    close_at = Timex.shift(open_at, days: 7)
+
     assessment_params =
       xml
       |> xpath(
@@ -121,8 +135,6 @@ defmodule Cadet.Updater.XMLParser do
         access: ~x"./@access"s |> transform_by(&process_access/1),
         type: ~x"./@kind"s |> transform_by(&change_quest_to_sidequest/1),
         title: ~x"./@title"s,
-        open_at: ~x"./@startdate"s |> transform_by(&Timex.parse!(&1, "{ISO:Extended}")),
-        close_at: ~x"./@duedate"s |> transform_by(&Timex.parse!(&1, "{ISO:Extended}")),
         number: ~x"./@number"s,
         story: ~x"./@story"s,
         cover_picture: ~x"./@coverimage"s,
@@ -132,6 +144,8 @@ defmodule Cadet.Updater.XMLParser do
         password: ~x"//PASSWORD/text()"so |> transform_by(&process_charlist/1)
       )
       |> Map.put(:is_published, false)
+      |> Map.put(:open_at, open_at)
+      |> Map.put(:close_at, close_at)
 
     if assessment_params.access === "public" do
       Map.put(assessment_params, :password, nil)
@@ -141,17 +155,9 @@ defmodule Cadet.Updater.XMLParser do
       Map.put(assessment_params, :password, "")
     end
 
-    if verify_has_time_offset(assessment_params) do
-      {:ok, assessment_params}
-    else
-      error_message = "Time does not have offset specified."
-      return_badrequest(error_message)
-    end
+    {:ok, assessment_params}
+    
   rescue
-    e in Timex.Parse.ParseError ->
-      error_message = "Time does not conform to ISO8601 DateTime: #{e.message}"
-      return_badrequest(error_message)
-
     # This error is raised by xpath/3 when TASK does not exist (hence is equal to nil)
     Protocol.UndefinedError ->
       error_message = "Missing TASK"
@@ -173,16 +179,6 @@ defmodule Cadet.Updater.XMLParser do
 
   defp change_quest_to_sidequest(type) when is_binary(type) do
     type
-  end
-
-  @spec verify_has_time_offset(%{
-          :open_at => DateTime.t() | NaiveDateTime.t(),
-          :close_at => DateTime.t() | NaiveDateTime.t(),
-          optional(atom()) => any()
-        }) :: boolean()
-  defp verify_has_time_offset(%{open_at: open_at, close_at: close_at}) do
-    # Timex.parse!/2 returns NaiveDateTime when offset is not specified, or DateTime otherwise.
-    open_at.__struct__ != NaiveDateTime and close_at.__struct__ != NaiveDateTime
   end
 
   @spec process_questions(String.t()) :: {:ok, [map()]} | {:error, {atom(), String.t}}
