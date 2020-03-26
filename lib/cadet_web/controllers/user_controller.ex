@@ -7,6 +7,7 @@ defmodule CadetWeb.UserController do
   use PhoenixSwagger
 
   import Cadet.Assessments
+  import Cadet.Course.Groups
 
   def index(conn, _) do
     user = conn.assigns.current_user
@@ -17,6 +18,36 @@ defmodule CadetWeb.UserController do
 
     render(
       conn,
+      "index.json",
+      user: user,
+      grade: grade,
+      max_grade: max_grade,
+      story: story,
+      xp: xp
+    )
+  end
+
+  def show(conn, _) do
+    group_avengers = get_group_avengers()
+
+    IO.inspect(conn)
+    IO.inspect(group_avengers)
+    IO.puts("\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
+    json(
+      conn,
+      group_avengers
+    )
+  end
+
+  def test() do
+    user = Cadet.Accounts.get_user(5)
+    grade = user_total_grade(user)
+    max_grade = user_max_grade(user)
+    story = user_current_story(user)
+    xp = user_total_xp(user)
+
+    render(
+      user,
       "index.json",
       user: user,
       grade: grade,

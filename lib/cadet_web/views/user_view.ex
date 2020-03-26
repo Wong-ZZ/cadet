@@ -15,4 +15,10 @@ defmodule CadetWeb.UserView do
         })
     }
   end
+
+  def render("show.json", group_avengers) do
+    %{
+      info: group_avengers
+    }
+  end
 end
