@@ -114,8 +114,13 @@ defmodule Cadet.Updater.XMLParser do
     end
   catch
     # the :erlsom library used by SweetXml will exit if XML is invalid
-    :exit, _ ->
-      {:error, {:bad_request, "Invalid XML (Check if your tags are correct)"}}
+    :exit, parse_error ->
+      error_message = 
+        parse_error
+        |> nested_tuple_to_list()
+        |> List.flatten()
+        |> Enum.reduce("", fn x, acc -> acc <> to_string(x) <> " " end)
+      {:error, {:bad_request, "Invalid XML " <> error_message}}
   end
 
   @spec process_assessment(String.t()) :: {:ok, map()} | :error
@@ -355,4 +360,10 @@ defmodule Cadet.Updater.XMLParser do
     Logger.error(error_message)
     {:error, {:bad_request, error_message}}
   end
+
+  defp nested_tuple_to_list(tuple) when is_tuple(tuple) do
+    tuple |> Tuple.to_list |> Enum.map(&nested_tuple_to_list/1)
+  end
+
+  defp nested_tuple_to_list(x), do: x
 end
