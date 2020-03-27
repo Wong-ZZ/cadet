@@ -35,7 +35,8 @@ defmodule CadetWeb.Router do
     resources("/material", MaterialController, only: [:create, :update, :delete])
 
     resources("/sourcecast", SourcecastController, only: [:create, :delete])
-    resources("/chapter", ChaptersController, only: [:index, :show])
+    resources("/chapter", ChaptersController, only: [:index, :update])
+    post("/chapter/update/:id", ChaptersController, :update)
 
     get("/assessments", AssessmentsController, :index)
     post("/assessments", AssessmentsController, :create)
