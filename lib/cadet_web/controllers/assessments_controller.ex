@@ -89,8 +89,8 @@ defmodule CadetWeb.AssessmentsController do
       :ok ->
         send_resp(conn, 200, "OK")
 
-      :error ->
-        send_resp(conn, :bad_request, "Something went wrong with the parsing")
+      {:ok, warning_message} ->
+        send_resp(conn, 200, warning_message)
 
       {:error, {status, message}} ->
         send_resp(conn, status, message)

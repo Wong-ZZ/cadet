@@ -77,7 +77,7 @@ defmodule Cadet.Updater.XMLParser do
     end
   end
 
-  @spec parse_xml(String.t()) :: :ok | :error | {:error, {atom(), String.t}}
+  @spec parse_xml(String.t()) :: :ok | {:error, {atom(), String.t}}
   def parse_xml(xml) do
     with {:ok, assessment_params} <- process_assessment(xml),
          {:ok, questions_params} <- process_questions(xml),
@@ -92,15 +92,12 @@ defmodule Cadet.Updater.XMLParser do
 
       :ok
     else
-      :error ->
-        :error
-
       {:error, {status, message}} ->
         {:error, {status, message}}
 
       {:error, stage, %{errors: [assessment: {"is already open", []}]}, _} when is_atom(stage) ->
         Logger.warn("Assessment already open, ignoring...")
-        :ok
+        {:ok, "Assessment already open, ignoring..."} 
 
       {:error, stage, changeset, _} when is_atom(stage) ->
         log_error_bad_changeset(changeset, stage)
@@ -128,7 +125,7 @@ defmodule Cadet.Updater.XMLParser do
     |> List.foldr("", fn x, acc -> acc <> x <> " " end)
   end
 
-  @spec process_assessment(String.t()) :: {:ok, map()} | :error
+  @spec process_assessment(String.t()) :: {:ok, map()} | {:error, {atom(), String.t}}
   defp process_assessment(xml) do
     open_at = 
       Timex.now()
