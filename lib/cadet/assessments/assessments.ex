@@ -30,13 +30,16 @@ defmodule Cadet.Assessments do
       previous_open_time = assessment.open_at
       cond do
         Timex.before?(close_at, open_at) -> 
-          {:error, {:bad_request, "End date should occur after Opening date"}}
-        
-        Timex.before?(open_at, Timex.now()) ->
-          {:error, {:bad_request, "New Opening date should occur after current time"}}
+          {:error, {:bad_request, "New end date should occur after new opening date"}}
+
+        Timex.before?(close_at, Timex.now()) ->
+          {:error, {:bad_request, "New end date should occur after current time"}}
 
         Timex.equal?(previous_open_time, open_at) or Timex.after?(previous_open_time, Timex.now()) ->
           update_assessment(id, %{close_at: close_at, open_at: open_at})
+
+        Timex.before?(open_at, Timex.now()) ->
+          {:error, {:bad_request, "New Opening date should occur after current time"}}
         
         true ->
           {:error, {:forbidden, "Assessment is already opened"}}
