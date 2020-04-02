@@ -22,6 +22,8 @@ defmodule CadetWeb.ChaptersController do
   def update(conn, %{"id" => id, "chapterno" => chapterno}) do
     {:ok, chapter} = Chapters.update_chapter(chapterno)
 
+    IO.inspect(conn.assigns[:current_user])
+
     render(
       conn,
       "show.json",

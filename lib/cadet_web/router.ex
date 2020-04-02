@@ -52,11 +52,12 @@ defmodule CadetWeb.Router do
     post("/grading/:submissionid/unsubmit", GradingController, :unsubmit)
     post("/grading/:submissionid/:questionid", GradingController, :update)
 
+    get("/groups", GroupController, :index)
+
     get("/notification", NotificationController, :index)
     post("/notification/acknowledge", NotificationController, :acknowledge)
 
     get("/user", UserController, :index)
-    post("/user/groups", UserController, :show)
 
     post("/chat/token", ChatController, :index)
     post("/chat/notify", ChatController, :notify)
