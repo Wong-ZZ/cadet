@@ -77,14 +77,15 @@ defmodule Cadet.Updater.XMLParser do
     end
   end
 
-  @spec parse_xml(String.t()) :: :ok | {:error, {atom(), String.t}}
-  def parse_xml(xml) do
+  @spec parse_xml(String.t(), boolean()) :: :ok | {:error, {atom(), String.t}}
+  def parse_xml(xml, force_update \\ false) do
     with {:ok, assessment_params} <- process_assessment(xml),
          {:ok, questions_params} <- process_questions(xml),
          {:ok, %{assessment: assessment}} <-
            Assessments.insert_or_update_assessments_and_questions(
              assessment_params,
-             questions_params
+             questions_params,
+             force_update
            ) do
       Logger.info(
         "Created/updated assessment with id: #{assessment.id}, with #{length(questions_params)} questions."

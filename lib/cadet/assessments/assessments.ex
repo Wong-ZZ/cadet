@@ -336,15 +336,15 @@ defmodule Cadet.Assessments do
   @doc """
   The main function that inserts or updates assessments from the XML Parser
   """
-  @spec insert_or_update_assessments_and_questions(map(), [map()]) ::
+  @spec insert_or_update_assessments_and_questions(map(), [map()], boolean()) ::
           {:ok, any()}
           | {:error, Ecto.Multi.name(), any(), %{optional(Ecto.Multi.name()) => any()}}
-  def insert_or_update_assessments_and_questions(assessment_params, questions_params) do
+  def insert_or_update_assessments_and_questions(assessment_params, questions_params, force_update) do
     assessment_multi =
       Multi.insert_or_update(
         Multi.new(),
         :assessment,
-        insert_or_update_assessment_changeset(assessment_params)
+        insert_or_update_assessment_changeset(assessment_params, force_update)
       )
 
     questions_params
@@ -361,8 +361,8 @@ defmodule Cadet.Assessments do
     |> Repo.transaction()
   end
 
-  @spec insert_or_update_assessment_changeset(map()) :: Ecto.Changeset.t()
-  defp insert_or_update_assessment_changeset(params = %{number: number}) do
+  @spec insert_or_update_assessment_changeset(map(), boolean()) :: Ecto.Changeset.t()
+  defp insert_or_update_assessment_changeset(params = %{number: number}, force_update) do
     Assessment
     |> where(number: ^number)
     |> Repo.one()
@@ -370,8 +370,8 @@ defmodule Cadet.Assessments do
       nil ->
         Assessment.changeset(%Assessment{}, params)
       assessment ->        
-        if Timex.after?(assessment.open_at, Timex.now()) do
-          # Delete all existing questions
+        if Timex.after?(assessment.open_at, Timex.now()) or force_update do
+        #   Delete all existing questions
           %{id: assessment_id} = assessment
 
           Question

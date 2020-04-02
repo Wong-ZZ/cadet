@@ -4,7 +4,7 @@ defmodule CadetWeb.AssessmentsController do
   use PhoenixSwagger
 
   alias Cadet.Assessments
-  import Cadet.Updater.XMLParser, only: [parse_xml: 1]
+  import Cadet.Updater.XMLParser, only: [parse_xml: 2]
 
   def submit(conn, %{"assessmentid" => assessment_id}) when is_ecto_id(assessment_id) do
     case Assessments.finalise_submission(assessment_id, conn.assigns.current_user) do
@@ -79,15 +79,22 @@ defmodule CadetWeb.AssessmentsController do
     end
   end
 
-  def create(conn, %{"assessment" => assessment}) do
-    file = assessment["file"]
-    result = file.path 
-    |> File.read!()
-    |> parse_xml()
+  def create(conn, %{"assessment" => assessment, "forceUpdate" => force_update}) do
+    file = assessment["file"].path
+      |> File.read!()
+    result = 
+      case force_update do
+        "true" -> parse_xml(file, true)
+        "false" -> parse_xml(file, false)
+      end
 
     case result do
       :ok ->
-        send_resp(conn, 200, "OK")
+        if (force_update == "true") do
+          send_resp(conn, 200, "Force Update OK")
+        else
+          send_resp(conn, 200, "OK")
+        end
 
       {:ok, warning_message} ->
         send_resp(conn, 200, warning_message)
