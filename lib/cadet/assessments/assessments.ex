@@ -255,59 +255,6 @@ defmodule Cadet.Assessments do
     assessment_with_questions_and_answers(id, user, nil)
   end
 
-@doc """
-  Returns a list of assessments with all fields and an indicator showing whether it has been attempted
-  by the supplied user
-  """
-  def all_published_assessments(user = %User{}) do
-    assessments =
-      Query.all_assessments_with_max_xp_and_grade()
-      |> subquery()
-      |> join(
-        :left,
-        [a],
-        s in subquery(Query.all_submissions_with_xp_and_grade()),
-        on: a.id == s.assessment_id and s.student_id == ^user.id
-      )
-      |> join(
-        :left,
-        [a, _],
-        q_count in subquery(Query.assessments_question_count()),
-        on: a.id == q_count.assessment_id
-      )
-      |> join(
-        :left,
-        [_, s, _],
-        a_count in subquery(Query.submissions_graded_count()),
-        on: s.id == a_count.submission_id
-      )
-      |> select([a, s, q_count, a_count], %{
-        a
-        | xp: fragment("? + ? + ?", s.xp, s.xp_adjustment, s.xp_bonus),
-          grade: fragment("? + ?", s.grade, s.adjustment),
-          user_status: s.status,
-          question_count: q_count.count,
-          graded_count: a_count.count
-      })
-      |> where(is_published: true)
-      |> order_by(:open_at)
-      |> Repo.all()
-      |> Enum.map(fn assessment = %Assessment{} ->
-        %{
-          assessment
-          | grading_status:
-              build_grading_status(
-                assessment.user_status,
-                assessment.type,
-                assessment.question_count,
-                assessment.graded_count
-              )
-        }
-      end)
-
-    {:ok, assessments}
-  end
-
   def all_assessments(user = %User{}) do
     assessments =
       Query.all_assessments_with_max_xp_and_grade()
@@ -338,6 +285,7 @@ defmodule Cadet.Assessments do
           question_count: q_count.count,
           graded_count: a_count.count
       })
+      |> filter_published_assessments(user)
       |> order_by(:open_at)
       |> Repo.all()
       |> Enum.map(fn assessment = %Assessment{} ->
@@ -356,11 +304,11 @@ defmodule Cadet.Assessments do
     {:ok, assessments}
   end
 
-  def get_assessments_overview(user = %User{}) do
+  def filter_published_assessments(assessments, user) do 
     role = user.role
     case role do
-      :student -> all_published_assessments(user)
-      _ -> all_assessments(user)
+      :student -> where(assessments, is_published: true)
+      _ -> assessments
     end
   end
 

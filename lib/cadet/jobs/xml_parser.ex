@@ -107,10 +107,9 @@ defmodule Cadet.Updater.XMLParser do
         changeset_error = 
           changeset
           |> Map.get(:errors)
-          |> List.first()
-        {field, {error, _}} = changeset_error
-        error_message = to_string(field) <> " " <> error
-        {:error, {:bad_request, error_message}}
+          |> extract_changeset_error_message
+        error_message = "Invalid #{stage} changeset " <> changeset_error
+        log_and_return_badrequest(error_message)
     end
   catch
     # the :erlsom library used by SweetXml will exit if XML is invalid
@@ -121,6 +120,12 @@ defmodule Cadet.Updater.XMLParser do
         |> List.flatten()
         |> Enum.reduce("", fn x, acc -> acc <> to_string(x) <> " " end)
       {:error, {:bad_request, "Invalid XML " <> error_message}}
+  end
+
+  defp extract_changeset_error_message(errors_list) do
+    errors_list
+    |> Enum.map(fn {field, {error, _}} -> to_string(field) <> " " <> error end)
+    |> List.foldr("", fn x, acc -> acc <> x <> " " end)
   end
 
   @spec process_assessment(String.t()) :: {:ok, map()} | :error
@@ -166,7 +171,7 @@ defmodule Cadet.Updater.XMLParser do
     # This error is raised by xpath/3 when TASK does not exist (hence is equal to nil)
     Protocol.UndefinedError ->
       error_message = "Missing TASK"
-      return_badrequest(error_message)
+      log_and_return_badrequest(error_message)
   end
 
   def process_access("private") do
@@ -211,7 +216,7 @@ defmodule Cadet.Updater.XMLParser do
         else
           {:no_missing_attr?, false} ->
             error_message = "Missing attribute(s) on PROBLEM"
-            return_badrequest(error_message)
+            log_and_return_badrequest(error_message)
           
           {:error, {status, message}} ->
             {:error, {status, message}}
@@ -294,7 +299,7 @@ defmodule Cadet.Updater.XMLParser do
 
   defp process_question_entity_by_type(_, _) do
     error_message = "Invalid question type."
-    return_badrequest(error_message)
+    log_and_return_badrequest(error_message)
   end
 
   @spec process_question_library(map(), any(), any()) :: map() | {:error, {atom(), String.t}}
@@ -310,7 +315,7 @@ defmodule Cadet.Updater.XMLParser do
       |> Map.put(:grading_library, process_question_library(grading_library))
     else
       error_message = "Missing DEPLOYMENT"
-      return_badrequest(error_message)
+      log_and_return_badrequest(error_message)
     end
   end
 
@@ -356,7 +361,7 @@ defmodule Cadet.Updater.XMLParser do
     |> String.trim()
   end
 
-  defp return_badrequest(error_message) do
+  defp log_and_return_badrequest(error_message) do
     Logger.error(error_message)
     {:error, {:bad_request, error_message}}
   end
