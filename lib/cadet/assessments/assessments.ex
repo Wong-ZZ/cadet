@@ -350,18 +350,63 @@ defmodule Cadet.Assessments do
         insert_or_update_assessment_changeset(assessment_params, force_update)
       )
 
-    questions_params
-    |> Enum.with_index(1)
-    |> Enum.reduce(assessment_multi, fn {question_params, index}, multi ->
-      Multi.run(multi, String.to_atom("question#{index}"), fn _repo,
-                                                              %{assessment: %Assessment{id: id}} ->
-        question_params
-        |> Map.put(:display_order, index)
-        |> build_question_changeset_for_assessment_id(id)
-        |> Repo.insert()
+    if force_update and check_question_count(assessment_multi, questions_params) do
+      {:error, "Question count is different"}
+    else
+      questions_params
+      |> Enum.with_index(1)
+      |> Enum.reduce(assessment_multi, fn {question_params, index}, multi ->
+        Multi.run(multi, String.to_atom("question#{index}"), fn _repo,
+                                                                %{assessment: %Assessment{id: id}} ->
+          question_exists = 
+            Repo.exists?(where(Question, [q], q.assessment_id == ^id and q.display_order == ^index))
+          if !force_update or !question_exists do 
+            question_params
+            |> Map.put(:display_order, index)
+            |> build_question_changeset_for_assessment_id(id)
+            |> Repo.insert()
+          else
+            params = 
+              (if !question_params.max_xp do 
+                question_params
+                |> Map.put(:max_xp, 0)
+              else
+                question_params
+              end)
+              |> Map.put(:display_order, index)
+
+            %{id: question_id} = 
+              where(Question, [q], q.display_order == ^index and q.assessment_id == ^id)
+              |> Repo.one()
+
+            changeset = Question.changeset(%Question{assessment_id: id, id: question_id}, params)
+            Repo.update(changeset)
+          end
+        end)
       end)
-    end)
-    |> Repo.transaction()
+      |> Repo.transaction()
+    end
+  end
+
+  defp check_question_count(assessment_multi, questions_params) do
+    assessment_id =
+      (assessment_multi.operations
+      |> List.first()
+      |> elem(1)
+      |> elem(1)).data.id
+
+    if !assessment_id do 
+      false 
+    else
+      existing_questions_count = 
+      where(Question, [q], q.assessment_id == ^assessment_id)
+      |> Repo.all()
+      |> Enum.count
+
+      new_questions_count = Enum.count(questions_params)
+
+      existing_questions_count != new_questions_count
+    end    
   end
 
   @spec insert_or_update_assessment_changeset(map(), boolean()) :: Ecto.Changeset.t()
@@ -372,19 +417,30 @@ defmodule Cadet.Assessments do
     |> case do
       nil ->
         Assessment.changeset(%Assessment{}, params)
-      assessment ->        
-        if Timex.after?(assessment.open_at, Timex.now()) or force_update do
-        #   Delete all existing questions
-          %{id: assessment_id} = assessment
+      assessment ->
+        cond do
+          Timex.after?(assessment.open_at, Timex.now()) ->
+            # Delete all existing questions
+            %{id: assessment_id} = assessment
 
-          Question
-          |> where(assessment_id: ^assessment_id)
-          |> Repo.delete_all()
+            Question
+            |> where(assessment_id: ^assessment_id)
+            |> Repo.delete_all()
 
-          Assessment.changeset(assessment, params)
-        else
-          # if the assessment is already open, don't mess with it
-          create_invalid_changeset_with_error(:assessment, "is already open")
+            Assessment.changeset(assessment, params)
+
+          force_update ->
+            # Maintain the same open/close date when force updating an assessment
+            new_params = 
+              params
+              |> Map.delete(:open_at)
+              |> Map.delete(:close_at)
+
+            Assessment.changeset(assessment, new_params)
+
+          true ->
+            # if the assessment is already open, don't mess with it
+            create_invalid_changeset_with_error(:assessment, "is already open")
         end
     end
   end

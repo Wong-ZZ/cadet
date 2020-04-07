@@ -77,7 +77,7 @@ defmodule Cadet.Updater.XMLParser do
     end
   end
 
-  @spec parse_xml(String.t(), boolean()) :: :ok | {:error, {atom(), String.t}}
+  @spec parse_xml(String.t(), boolean()) :: :ok | {:ok, String.t} | {:error, {atom(), String.t}}
   def parse_xml(xml, force_update \\ false) do
     with {:ok, assessment_params} <- process_assessment(xml),
          {:ok, questions_params} <- process_questions(xml),
@@ -93,12 +93,12 @@ defmodule Cadet.Updater.XMLParser do
 
       :ok
     else
-      {:error, {status, message}} ->
-        {:error, {status, message}}
-
       {:error, stage, %{errors: [assessment: {"is already open", []}]}, _} when is_atom(stage) ->
         Logger.warn("Assessment already open, ignoring...")
-        {:ok, "Assessment already open, ignoring..."} 
+        {:ok, "Assessment already open, ignoring..."}
+
+      {:error, errmsg} ->
+        log_and_return_badrequest(errmsg)
 
       {:error, stage, changeset, _} when is_atom(stage) ->
         log_error_bad_changeset(changeset, stage)
@@ -126,7 +126,7 @@ defmodule Cadet.Updater.XMLParser do
     |> List.foldr("", fn x, acc -> acc <> x <> " " end)
   end
 
-  @spec process_assessment(String.t()) :: {:ok, map()} | {:error, {atom(), String.t}}
+  @spec process_assessment(String.t()) :: {:ok, map()} | {:error, String.t}
   defp process_assessment(xml) do
     open_at = 
       Timex.now()
@@ -168,8 +168,7 @@ defmodule Cadet.Updater.XMLParser do
   rescue
     # This error is raised by xpath/3 when TASK does not exist (hence is equal to nil)
     Protocol.UndefinedError ->
-      error_message = "Missing TASK"
-      log_and_return_badrequest(error_message)
+      {:error, "Missing TASK"}
   end
 
   def process_access("private") do
@@ -189,7 +188,7 @@ defmodule Cadet.Updater.XMLParser do
     type
   end
 
-  @spec process_questions(String.t()) :: {:ok, [map()]} | {:error, {atom(), String.t}}
+  @spec process_questions(String.t()) :: {:ok, [map()]} | {:error, String.t}
   defp process_questions(xml) do
     default_library = xpath(xml, ~x"//TASK/DEPLOYMENT"e)
     default_grading_library = xpath(xml, ~x"//TASK/GRADERDEPLOYMENT"e)
@@ -213,11 +212,10 @@ defmodule Cadet.Updater.XMLParser do
           question
         else
           {:no_missing_attr?, false} ->
-            error_message = "Missing attribute(s) on PROBLEM"
-            log_and_return_badrequest(error_message)
+            {:error, "Missing attribute(s) on PROBLEM"}
           
-          {:error, {status, message}} ->
-            {:error, {status, message}}
+          {:error, errmsg} ->
+            {:error, errmsg}
         end
       end)
 
@@ -236,7 +234,7 @@ defmodule Cadet.Updater.XMLParser do
     Logger.error("Changeset: #{inspect(changeset, pretty: true)}")
   end
 
-  @spec process_question_by_question_type(map()) :: map() | {:error, {atom(), String.t}}
+  @spec process_question_by_question_type(map()) :: map() | {:error, String.t}
   defp process_question_by_question_type(question) do
     question[:entity]
     |> process_question_entity_by_type(question[:type])
@@ -244,8 +242,8 @@ defmodule Cadet.Updater.XMLParser do
       question_map when is_map(question_map) ->
         Map.put(question, :question, question_map)
 
-      {:error, {status, message}} ->
-        {:error, {status, message}}
+      {:error, errmsg} ->
+        {:error, errmsg}
     end
   end
 
@@ -296,11 +294,10 @@ defmodule Cadet.Updater.XMLParser do
   end
 
   defp process_question_entity_by_type(_, _) do
-    error_message = "Invalid question type."
-    log_and_return_badrequest(error_message)
+    {:error, "Invalid question type"}
   end
 
-  @spec process_question_library(map(), any(), any()) :: map() | {:error, {atom(), String.t}}
+  @spec process_question_library(map(), any(), any()) :: map() | {:error, String.t}
   defp process_question_library(question, default_library, default_grading_library) do
     library = xpath(question[:entity], ~x"./DEPLOYMENT"o) || default_library
 
@@ -312,8 +309,7 @@ defmodule Cadet.Updater.XMLParser do
       |> Map.put(:library, process_question_library(library))
       |> Map.put(:grading_library, process_question_library(grading_library))
     else
-      error_message = "Missing DEPLOYMENT"
-      log_and_return_badrequest(error_message)
+      {:error, "Missing DEPLOYMENT"}
     end
   end
 
